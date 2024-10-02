@@ -1,0 +1,37 @@
+service: flu-metrics-cllector-api-serverless
+
+frameworkVersion: "3"
+
+useDotenv: true
+
+provider:
+  name: aws
+  runtime: python3.11
+  region: us-east-1
+  stage: local
+  environment:
+    STAGE: ${self:provider.stage}
+    DB_HOST: ${env:DB_HOST, 'localhost'}
+    DB_SECRET_NAME: ${env:DB_SECRET_NAME, 'my-db-secret'}
+    DB_NAME: mydatabase
+
+functions:
+  hello:
+    handler: src/status/hello.handler
+    events:
+      - http:
+          path: /status/hello
+          method: get
+          cors: true
+
+plugins:
+  - serverless-python-requirements
+  - serverless-offline
+
+custom:
+  pythonRequirements:
+    dockerizePip: true
+    slim: true
+  serverless-offline:
+    httpPort: 4000
+    lambdaPort: 4004

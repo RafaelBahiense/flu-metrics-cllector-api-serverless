@@ -1,0 +1,235 @@
+service: flu-metrics-cllector-api-serverless
+
+frameworkVersion: "3"
+
+useDotenv: true
+
+provider:
+  name: aws
+  runtime: python3.11
+  region: us-east-1
+  stage: ${opt:stage, 'dev'}
+  environment:
+    STAGE: ${self:provider.stage}
+    DB_HOST: ${self:custom.dbHost}
+    DB_SECRET_NAME: ${self:custom.dbSecretName}
+    DB_NAME: mydatabase
+  vpc:
+    securityGroupIds:
+      - ${self:custom.lambdaSecurityGroupId}
+    subnetIds:
+      - ${self:custom.privateSubnet1Id}
+      - ${self:custom.privateSubnet2Id}
+  iam:
+    role:
+      statements:
+        - Effect: "Allow"
+          Action:
+            - "secretsmanager:GetSecretValue"
+          Resource:
+            - ${self:custom.dbSecretArn}
+
+functions:
+  hello:
+    handler: status/hello.handler
+    events:
+      - http:
+          path: /status/hello
+          method: get
+          cors: true
+
+plugins:
+  - serverless-python-requirements
+  - serverless-offline
+
+custom:
+  dbHost: ${cf:${self:service}-${self:provider.stage}.AuroraDBCluster.Endpoint.Address}
+  dbSecretName: my-db-secret
+  dbSecretArn: ${cf:${self:service}-${self:provider.stage}.DBSecret.Arn}
+  lambdaSecurityGroupId: ${cf:${self:service}-${self:provider.stage}.LambdaSecurityGroup}
+  privateSubnet1Id: ${cf:${self:service}-${self:provider.stage}.PrivateSubnet1}
+  privateSubnet2Id: ${cf:${self:service}-${self:provider.stage}.PrivateSubnet2}
+
+  pythonRequirements:
+    dockerizePip: true
+    slim: true
+
+resources:
+  Parameters:
+    DBMasterUserPassword:
+      Type: String
+      NoEcho: true
+      Description: Master password for the Aurora PostgreSQL database.
+
+  Resources:
+    VPC:
+      Type: AWS::EC2::VPC
+      Properties:
+        CidrBlock: 10.0.0.0/16
+        EnableDnsSupport: true
+        EnableDnsHostnames: true
+        Tags:
+          - Key: Name
+            Value: ${self:service}-vpc
+
+    PrivateSubnet1:
+      Type: AWS::EC2::Subnet
+      Properties:
+        VpcId: !Ref VPC
+        CidrBlock: 10.0.1.0/24
+        AvailabilityZone: ${self:provider.region}a
+        Tags:
+          - Key: Name
+            Value: ${self:service}-private-subnet-1
+
+    PrivateSubnet2:
+      Type: AWS::EC2::Subnet
+      Properties:
+        VpcId: !Ref VPC
+        CidrBlock: 10.0.2.0/24
+        AvailabilityZone: ${self:provider.region}b
+        Tags:
+          - Key: Name
+            Value: ${self:service}-private-subnet-2
+
+    InternetGateway:
+      Type: AWS::EC2::InternetGateway
+      Properties:
+        Tags:
+          - Key: Name
+            Value: ${self:service}-igw
+
+    AttachGateway:
+      Type: AWS::EC2::VPCGatewayAttachment
+      Properties:
+        VpcId: !Ref VPC
+        InternetGatewayId: !Ref InternetGateway
+
+    RouteTable:
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId: !Ref VPC
+        Tags:
+          - Key: Name
+            Value: ${self:service}-route-table
+
+    DefaultRoute:
+      Type: AWS::EC2::Route
+      DependsOn: AttachGateway
+      Properties:
+        RouteTableId: !Ref RouteTable
+        DestinationCidrBlock: 0.0.0.0/0
+        GatewayId: !Ref InternetGateway
+
+    SubnetRouteTableAssociation1:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        SubnetId: !Ref PrivateSubnet1
+        RouteTableId: !Ref RouteTable
+
+    SubnetRouteTableAssociation2:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        SubnetId: !Ref PrivateSubnet2
+        RouteTableId: !Ref RouteTable
+
+    LambdaSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: "Security group for Lambda functions"
+        VpcId: !Ref VPC
+        Tags:
+          - Key: Name
+            Value: ${self:service}-lambda-sg
+
+    DBSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: "Security group for Aurora DB cluster"
+        VpcId: !Ref VPC
+        SecurityGroupIngress:
+          - IpProtocol: tcp
+            FromPort: 5432
+            ToPort: 5432
+            SourceSecurityGroupId: !Ref LambdaSecurityGroup
+        Tags:
+          - Key: Name
+            Value: ${self:service}-db-sg
+
+    DBSubnetGroup:
+      Type: AWS::RDS::DBSubnetGroup
+      Properties:
+        DBSubnetGroupDescription: "Subnet group for Aurora DB cluster"
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+        DBSubnetGroupName: ${self:service}-db-subnet-group
+
+    AuroraDBCluster:
+      Type: AWS::RDS::DBCluster
+      Properties:
+        Engine: aurora-postgresql
+        EngineVersion: "15.4"
+        DatabaseName: fluapidatabase
+        MasterUsername: admin
+        MasterUserPassword: !Ref DBMasterUserPassword
+        VpcSecurityGroupIds:
+          - !GetAtt DBSecurityGroup.GroupId
+        DBSubnetGroupName: !Ref DBSubnetGroup
+        StorageEncrypted: true
+
+    AuroraDBInstance:
+      Type: AWS::RDS::DBInstance
+      Properties:
+        DBClusterIdentifier: !Ref AuroraDBCluster
+        DBInstanceClass: db.serverless
+        Engine: aurora-postgresql
+        PubliclyAccessible: false
+
+    DBSecret:
+      Type: AWS::SecretsManager::Secret
+      Properties:
+        Name: my-db-secret
+        Description: "Database credentials"
+        SecretString: !Sub |
+          {
+            "username": "${DBUsername}",
+            "password": "${DBPassword}"
+          }
+        Tags:
+          - Key: Name
+            Value: ${self:service}-db-secret
+      Metadata:
+        DBUsername: admin
+        DBPassword: !Ref DBMasterUserPassword
+
+Outputs:
+  AuroraDBClusterEndpoint:
+    Description: "Aurora DB Cluster Endpoint"
+    Value: !GetAtt AuroraDBCluster.Endpoint.Address
+    Export:
+      Name: ${self:service}-${self:provider.stage}-db-endpoint
+
+  LambdaSecurityGroup:
+    Description: "Security Group ID for Lambda Functions"
+    Value: !Ref LambdaSecurityGroup
+    Export:
+      Name: ${self:service}-${self:provider.stage}-lambda-sg
+
+  PrivateSubnet1:
+    Description: "Private Subnet 1 ID"
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: ${self:service}-${self:provider.stage}-private-subnet-1
+
+  PrivateSubnet2:
+    Description: "Private Subnet 2 ID"
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: ${self:service}-${self:provider.stage}-private-subnet-2
+
+  DBSecretArn:
+    Description: "ARN of the DB Secret"
+    Value: !Ref DBSecret
+    Export:
+      Name: ${self:service}-${self:provider.stage}-db-secret-arn

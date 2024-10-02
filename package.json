@@ -1,0 +1,11 @@
+{
+  "devDependencies": {
+    "serverless": "^3.39.0",
+    "serverless-functions-base-path": "^1.0.33",
+    "serverless-offline": "^14.3.2",
+    "serverless-python-requirements": "^6.1.1"
+  },
+  "scripts": {
+    "dev": "serverless offline start --config serverless.offline.yml --stage dev --noAuth --reloadHandler --noPrependStageInUrl"
+  }
+}
