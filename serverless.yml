@@ -1,4 +1,4 @@
-service: flu-metrics-cllector-api-serverless
+service: flu-metrics-collector-api-serverless
 
 frameworkVersion: "3"
 
@@ -6,20 +6,18 @@ useDotenv: true
 
 provider:
   name: aws
+  deploymentMethod: direct
   runtime: python3.11
   region: us-east-1
   stage: ${opt:stage, 'dev'}
+  apiGateway:
+    minimumCompressionSize: 1024
+    shouldStartNameWithService: true
   environment:
     STAGE: ${self:provider.stage}
-    DB_HOST: ${self:custom.dbHost}
-    DB_SECRET_NAME: ${self:custom.dbSecretName}
+    DB_HOST: !GetAtt AuroraDBCluster.Endpoint.Address
+    DB_SECRET_NAME: my-db-secret
     DB_NAME: mydatabase
-  vpc:
-    securityGroupIds:
-      - ${self:custom.lambdaSecurityGroupId}
-    subnetIds:
-      - ${self:custom.privateSubnet1Id}
-      - ${self:custom.privateSubnet2Id}
   iam:
     role:
       statements:
@@ -27,7 +25,7 @@ provider:
           Action:
             - "secretsmanager:GetSecretValue"
           Resource:
-            - ${self:custom.dbSecretArn}
+            - !Ref DBSecret
 
 functions:
   hello:
@@ -37,29 +35,44 @@ functions:
           path: /status/hello
           method: get
           cors: true
+    vpc:
+      securityGroupIds:
+        - !GetAtt LambdaSecurityGroup.GroupId
+      subnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
 
 plugins:
   - serverless-python-requirements
   - serverless-offline
 
 custom:
-  dbHost: ${cf:${self:service}-${self:provider.stage}.AuroraDBCluster.Endpoint.Address}
-  dbSecretName: my-db-secret
-  dbSecretArn: ${cf:${self:service}-${self:provider.stage}.DBSecret.Arn}
-  lambdaSecurityGroupId: ${cf:${self:service}-${self:provider.stage}.LambdaSecurityGroup}
-  privateSubnet1Id: ${cf:${self:service}-${self:provider.stage}.PrivateSubnet1}
-  privateSubnet2Id: ${cf:${self:service}-${self:provider.stage}.PrivateSubnet2}
-
+  DBMasterUsername: ${param:DBMasterUsername}
+  DBMasterUserPassword: ${param:DBMasterUserPassword}
+  functionsBasePath: src
+  contentEncoding:
+    contentCompression: 100
   pythonRequirements:
-    dockerizePip: true
     slim: true
+    zip: true
+    useStaticCache: false
+    useDownloadCache: false
+    noDeploy:
+      - boto3
+      - botocore
+      - pip
 
 resources:
   Parameters:
+    DBMasterUsername:
+      Type: String
+      Description: Master username for the Aurora PostgreSQL database.
+      Default: ${self:custom.DBMasterUsername}
     DBMasterUserPassword:
       Type: String
       NoEcho: true
       Description: Master password for the Aurora PostgreSQL database.
+      Default: ${self:custom.DBMasterUserPassword}
 
   Resources:
     VPC:
@@ -171,12 +184,15 @@ resources:
         Engine: aurora-postgresql
         EngineVersion: "15.4"
         DatabaseName: fluapidatabase
-        MasterUsername: admin
+        MasterUsername: !Ref DBMasterUsername
         MasterUserPassword: !Ref DBMasterUserPassword
         VpcSecurityGroupIds:
           - !GetAtt DBSecurityGroup.GroupId
         DBSubnetGroupName: !Ref DBSubnetGroup
         StorageEncrypted: true
+        ServerlessV2ScalingConfiguration:
+          MinCapacity: 0.5
+          MaxCapacity: 1
 
     AuroraDBInstance:
       Type: AWS::RDS::DBInstance
@@ -191,45 +207,45 @@ resources:
       Properties:
         Name: my-db-secret
         Description: "Database credentials"
-        SecretString: !Sub |
-          {
-            "username": "${DBUsername}",
-            "password": "${DBPassword}"
-          }
+        SecretString: !Sub
+          - |
+            {
+              "username": "${Username}",
+              "password": "${Password}"
+            }
+          - Username: !Ref DBMasterUsername
+            Password: !Ref DBMasterUserPassword
         Tags:
           - Key: Name
             Value: ${self:service}-db-secret
-      Metadata:
-        DBUsername: admin
-        DBPassword: !Ref DBMasterUserPassword
 
-Outputs:
-  AuroraDBClusterEndpoint:
-    Description: "Aurora DB Cluster Endpoint"
-    Value: !GetAtt AuroraDBCluster.Endpoint.Address
-    Export:
-      Name: ${self:service}-${self:provider.stage}-db-endpoint
+  Outputs:
+    AuroraDBClusterEndpoint:
+      Description: "Aurora DB Cluster Endpoint"
+      Value: !GetAtt AuroraDBCluster.Endpoint.Address
+      Export:
+        Name: ${self:service}-${self:provider.stage}-db-endpoint
 
-  LambdaSecurityGroup:
-    Description: "Security Group ID for Lambda Functions"
-    Value: !Ref LambdaSecurityGroup
-    Export:
-      Name: ${self:service}-${self:provider.stage}-lambda-sg
+    LambdaSecurityGroup:
+      Description: "Security Group ID for Lambda Functions"
+      Value: !Ref LambdaSecurityGroup
+      Export:
+        Name: ${self:service}-${self:provider.stage}-lambda-sg
 
-  PrivateSubnet1:
-    Description: "Private Subnet 1 ID"
-    Value: !Ref PrivateSubnet1
-    Export:
-      Name: ${self:service}-${self:provider.stage}-private-subnet-1
+    PrivateSubnet1:
+      Description: "Private Subnet 1 ID"
+      Value: !Ref PrivateSubnet1
+      Export:
+        Name: ${self:service}-${self:provider.stage}-private-subnet-1
 
-  PrivateSubnet2:
-    Description: "Private Subnet 2 ID"
-    Value: !Ref PrivateSubnet2
-    Export:
-      Name: ${self:service}-${self:provider.stage}-private-subnet-2
+    PrivateSubnet2:
+      Description: "Private Subnet 2 ID"
+      Value: !Ref PrivateSubnet2
+      Export:
+        Name: ${self:service}-${self:provider.stage}-private-subnet-2
 
-  DBSecretArn:
-    Description: "ARN of the DB Secret"
-    Value: !Ref DBSecret
-    Export:
-      Name: ${self:service}-${self:provider.stage}-db-secret-arn
+    DBSecretArn:
+      Description: "ARN of the DB Secret"
+      Value: !Ref DBSecret
+      Export:
+        Name: ${self:service}-${self:provider.stage}-db-secret-arn
