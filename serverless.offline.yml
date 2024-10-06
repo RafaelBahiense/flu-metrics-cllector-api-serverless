@@ -1,4 +1,4 @@
-service: flu-metrics-cllector-api-serverless
+service: flu-metrics-collector-api-serverless
 
 frameworkVersion: "3"
 
@@ -7,31 +7,28 @@ useDotenv: true
 provider:
   name: aws
   runtime: python3.11
-  region: us-east-1
   stage: local
   environment:
     STAGE: ${self:provider.stage}
     DB_HOST: ${env:DB_HOST, 'localhost'}
+    DB_PORT: ${env:DB_PORT, '5432'}
     DB_SECRET_NAME: ${env:DB_SECRET_NAME, 'my-db-secret'}
-    DB_NAME: mydatabase
+    DB_NAME: ${env:DB_NAME, 'mydatabase'}
+    DB_USER: ${env:DB_USER}
+    DB_PASSWORD: ${env:DB_PASSWORD}
+    IS_OFFLINE: "true"
 
-functions:
-  hello:
-    handler: src/status/hello.handler
-    events:
-      - http:
-          path: /status/hello
-          method: get
-          cors: true
+functions: ${file(./functions.yml)}
 
 plugins:
+  - serverless-functions-base-path
   - serverless-python-requirements
   - serverless-offline
 
 custom:
-  pythonRequirements:
-    dockerizePip: true
-    slim: true
+  lambdaSecurityGroupId: "sg-xxxxxxxx"
+  privateSubnet1Id: "subnet-xxxxxxxx"
+  privateSubnet2Id: "subnet-yyyyyyyy"
   serverless-offline:
     httpPort: 4000
     lambdaPort: 4004

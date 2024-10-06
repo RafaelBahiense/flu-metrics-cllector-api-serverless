@@ -4,7 +4,7 @@ import json
 from src.infra.dbcredentials import get_db_credentials
 
 
-def hello(event, context):
+def handler(event, context):
     credentials = get_db_credentials()
     host = os.environ["DB_HOST"]
     port = 5432

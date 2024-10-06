@@ -1,0 +1,13 @@
+hello:
+  handler: src/status/hello.handler
+  events:
+    - http:
+        path: /status/hello
+        method: get
+        cors: true
+  vpc:
+    securityGroupIds:
+      - !GetAtt LambdaSecurityGroup.GroupId
+    subnetIds:
+      - !Ref PrivateSubnet1
+      - !Ref PrivateSubnet2

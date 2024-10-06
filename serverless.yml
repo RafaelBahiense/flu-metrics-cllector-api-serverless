@@ -27,20 +27,7 @@ provider:
           Resource:
             - !Ref DBSecret
 
-functions:
-  hello:
-    handler: status/hello.handler
-    events:
-      - http:
-          path: /status/hello
-          method: get
-          cors: true
-    vpc:
-      securityGroupIds:
-        - !GetAtt LambdaSecurityGroup.GroupId
-      subnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
+functions: ${file(./functions.yml)}
 
 plugins:
   - serverless-python-requirements
