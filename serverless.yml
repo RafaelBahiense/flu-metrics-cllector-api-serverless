@@ -4,8 +4,17 @@ frameworkVersion: "3"
 
 useDotenv: true
 
+package:
+  individually: false
+  excludeDevDependencies: false
+  patterns:
+    - "!./**"
+    - "src/**"
+    - "serverless/**"
+
 provider:
   name: aws
+  endpointType: REGIONAL
   deploymentMethod: direct
   runtime: python3.11
   region: us-east-1
@@ -15,6 +24,7 @@ provider:
     shouldStartNameWithService: true
   environment:
     STAGE: ${self:provider.stage}
+    AWS_STS_REGIONAL_ENDPOINTS: regional
     DB_HOST: !GetAtt AuroraDBCluster.Endpoint.Address
     DB_SECRET_NAME: my-db-secret
     DB_NAME: mydatabase
@@ -40,14 +50,13 @@ custom:
   contentEncoding:
     contentCompression: 100
   pythonRequirements:
-    slim: true
-    zip: true
+    dockerizePip: true
+    dockerImage: public.ecr.aws/sam/build-python3.11:latest-x86_64
     useStaticCache: false
     useDownloadCache: false
-    noDeploy:
-      - boto3
-      - botocore
-      - pip
+    # noDeploy:
+    #   - alembic
+    #   - pip
 
 resources:
   Parameters:
@@ -188,6 +197,7 @@ resources:
         DBInstanceClass: db.serverless
         Engine: aurora-postgresql
         PubliclyAccessible: false
+        Port: 5432
 
     DBSecret:
       Type: AWS::SecretsManager::Secret
@@ -205,6 +215,43 @@ resources:
         Tags:
           - Key: Name
             Value: ${self:service}-db-secret
+
+    VPCEndpointSTS:
+      Type: AWS::EC2::VPCEndpoint
+      Properties:
+        ServiceName: com.amazonaws.${self:provider.region}.sts
+        VpcId: !Ref VPC
+        VpcEndpointType: Interface
+        PrivateDnsEnabled: true
+        SecurityGroupIds:
+          - !Ref VPCEndpointSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+
+    VPCEndpointSecretsManager:
+      Type: AWS::EC2::VPCEndpoint
+      Properties:
+        ServiceName: com.amazonaws.${self:provider.region}.secretsmanager
+        VpcId: !Ref VPC
+        VpcEndpointType: Interface
+        PrivateDnsEnabled: true
+        SecurityGroupIds:
+          - !Ref VPCEndpointSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+
+    VPCEndpointSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: Security group for VPC endpoints
+        VpcId: !Ref VPC
+        SecurityGroupIngress:
+          - IpProtocol: tcp
+            FromPort: 443
+            ToPort: 443
+            SourceSecurityGroupId: !GetAtt LambdaSecurityGroup.GroupId
 
   Outputs:
     AuroraDBClusterEndpoint:
