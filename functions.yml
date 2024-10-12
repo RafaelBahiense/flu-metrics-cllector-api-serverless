@@ -11,3 +11,31 @@ hello:
     subnetIds:
       - !Ref PrivateSubnet1
       - !Ref PrivateSubnet2
+
+createMetric:
+  handler: src/metrics/create.handler
+  events:
+    - http:
+        path: /metrics
+        method: post
+        cors: true
+  vpc:
+    securityGroupIds:
+      - !GetAtt LambdaSecurityGroup.GroupId
+    subnetIds:
+      - !Ref PrivateSubnet1
+      - !Ref PrivateSubnet2
+
+listMetrics:
+  handler: src/metrics/list.handler
+  events:
+    - http:
+        path: /metrics
+        method: get
+        cors: true
+  vpc:
+    securityGroupIds:
+      - !GetAtt LambdaSecurityGroup.GroupId
+    subnetIds:
+      - !Ref PrivateSubnet1
+      - !Ref PrivateSubnet2

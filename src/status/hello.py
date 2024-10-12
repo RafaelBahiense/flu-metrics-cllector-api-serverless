@@ -1,21 +1,10 @@
-import psycopg2
-import os
 import json
-from src.infra.dbcredentials import get_db_credentials
+from src.infra.dbconnect import get_db_connection
 
 
 def handler(event, context):
-    credentials = get_db_credentials()
-    host = os.environ["DB_HOST"]
-    port = 5432
-    database = os.environ["DB_NAME"]
-    user = credentials["username"]
-    password = credentials["password"]
-
     try:
-        conn = psycopg2.connect(
-            host=host, port=port, database=database, user=user, password=password
-        )
+        conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("SELECT version();")
         db_version = cur.fetchone()
