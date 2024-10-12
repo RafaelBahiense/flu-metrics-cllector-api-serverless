@@ -39,3 +39,19 @@ listMetrics:
     subnetIds:
       - !Ref PrivateSubnet1
       - !Ref PrivateSubnet2
+
+migrate:
+  handler: src/migrations/handler.run_migrations
+  timeout: 300
+  memorySize: 512
+  environment:
+    AWS_STS_REGIONAL_ENDPOINTS: regional
+  vpc:
+    securityGroupIds:
+      - !Ref LambdaSecurityGroup
+    subnetIds:
+      - !Ref PrivateSubnet1
+      - !Ref PrivateSubnet2
+  layers:
+    - arn:aws:lambda:${self:provider.region}:770693421928:layer:Klayers-p311-SQLAlchemy:1
+    - arn:aws:lambda:${self:provider.region}:770693421928:layer:Klayers-p311-psycopg2-binary:1

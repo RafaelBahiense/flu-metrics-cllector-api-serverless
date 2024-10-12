@@ -7,10 +7,14 @@ useDotenv: true
 package:
   individually: false
   excludeDevDependencies: false
-  patterns:
-    - "!./**"
-    - "src/**"
-    - "serverless/**"
+  include:
+    - alembic/**
+    - alembic.ini
+    - src/**
+  exclude:
+    - node_modules/**
+    - .git/**
+    - .venv/**
 
 provider:
   name: aws

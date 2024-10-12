@@ -6,6 +6,8 @@
     "serverless-python-requirements": "6.1.1"
   },
   "scripts": {
-    "dev": "serverless offline start --config serverless.offline.yml --stage dev --noAuth --reloadHandler --noPrependStageInUrl"
+    "dev": "serverless offline start --config serverless.offline.yml --stage dev --noAuth --reloadHandler --noPrependStageInUrl",
+    "migrate:prod": "serverless invoke -f migrate --stage dev",
+    "migrate:dev": "serverless invoke local -f migrate --config serverless.offline.yml --stage dev"
   }
 }
