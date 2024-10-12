@@ -40,6 +40,20 @@ listMetrics:
       - !Ref PrivateSubnet1
       - !Ref PrivateSubnet2
 
+infoGripeAggregate:
+  handler: src/metrics/info_gripe_aggregate.handler
+  events:
+    - http:
+        path: /metrics/info-gripe-aggregate
+        method: get
+        cors: true
+  vpc:
+    securityGroupIds:
+      - !GetAtt LambdaSecurityGroup.GroupId
+    subnetIds:
+      - !Ref PrivateSubnet1
+      - !Ref PrivateSubnet2
+
 migrate:
   handler: src/migrations/run_migrations.handler
   timeout: 300
