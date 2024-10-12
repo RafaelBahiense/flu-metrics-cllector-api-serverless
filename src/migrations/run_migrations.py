@@ -4,7 +4,7 @@ from alembic import command
 from src.infra.dbcredentials import get_db_credentials
 
 
-def run_migrations(event, context):
+def handler(event, context):
     credentials = get_db_credentials()
     db_url = f"postgresql+psycopg2://{credentials['username']}:{credentials['password']}@{credentials['host']}:{credentials['port']}/{credentials['database']}"
 

@@ -8,6 +8,8 @@
   "scripts": {
     "dev": "serverless offline start --config serverless.offline.yml --stage dev --noAuth --reloadHandler --noPrependStageInUrl",
     "migrate:prod": "serverless invoke -f migrate --stage dev",
-    "migrate:dev": "serverless invoke local -f migrate --config serverless.offline.yml --stage dev"
+    "migrate:dev": "serverless invoke local -f migrate --config serverless.offline.yml --stage dev",
+    "load:prod": "serverless invoke -f loadInfoGripe --stage dev",
+    "load:dev": "serverless invoke local -f loadInfoGripe --config serverless.offline.yml --stage dev"
   }
 }
