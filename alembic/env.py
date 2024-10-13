@@ -3,6 +3,7 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 from dotenv import load_dotenv
+from src.infra.dbcredentials import get_db_credentials
 
 load_dotenv()
 
@@ -19,7 +20,8 @@ if not config.get_main_option("sqlalchemy.url"):
     db_url = os.environ.get("DB_URL")
     print(f"DB_URL: {db_url}")
     if not db_url:
-        raise Exception("DB_URL environment variable not set")
+        credentials = get_db_credentials()
+        db_url = f"postgresql+psycopg2://{credentials['username']}:{credentials['password']}@{credentials['host']}:{credentials['port']}/{credentials['database']}"
     config.set_main_option("sqlalchemy.url", db_url)
 
 # Add your model's MetaData object here

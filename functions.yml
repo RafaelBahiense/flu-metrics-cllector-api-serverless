@@ -5,12 +5,6 @@ hello:
         path: /status/hello
         method: get
         cors: true
-  vpc:
-    securityGroupIds:
-      - !GetAtt LambdaSecurityGroup.GroupId
-    subnetIds:
-      - !Ref PrivateSubnet1
-      - !Ref PrivateSubnet2
 
 createMetric:
   handler: src/metrics/create.handler
@@ -19,12 +13,6 @@ createMetric:
         path: /metrics
         method: post
         cors: true
-  vpc:
-    securityGroupIds:
-      - !GetAtt LambdaSecurityGroup.GroupId
-    subnetIds:
-      - !Ref PrivateSubnet1
-      - !Ref PrivateSubnet2
 
 listMetrics:
   handler: src/metrics/list.handler
@@ -33,12 +21,6 @@ listMetrics:
         path: /metrics
         method: get
         cors: true
-  vpc:
-    securityGroupIds:
-      - !GetAtt LambdaSecurityGroup.GroupId
-    subnetIds:
-      - !Ref PrivateSubnet1
-      - !Ref PrivateSubnet2
 
 infoGripeAggregate:
   handler: src/metrics/info_gripe_aggregate.handler
@@ -47,28 +29,20 @@ infoGripeAggregate:
         path: /metrics/info-gripe-aggregate
         method: get
         cors: true
-  vpc:
-    securityGroupIds:
-      - !GetAtt LambdaSecurityGroup.GroupId
-    subnetIds:
-      - !Ref PrivateSubnet1
-      - !Ref PrivateSubnet2
 
 migrate:
   handler: src/migrations/run_migrations.handler
   timeout: 300
   memorySize: 512
+  package:
+    include:
+      - alembic/**
+      - alembic.ini
   environment:
     AWS_STS_REGIONAL_ENDPOINTS: regional
-  vpc:
-    securityGroupIds:
-      - !Ref LambdaSecurityGroup
-    subnetIds:
-      - !Ref PrivateSubnet1
-      - !Ref PrivateSubnet2
   layers:
-    - arn:aws:lambda:${self:provider.region}:770693421928:layer:Klayers-p311-SQLAlchemy:1
-    - arn:aws:lambda:${self:provider.region}:770693421928:layer:Klayers-p311-psycopg2-binary:1
+    - arn:aws:lambda:us-east-1:286391634843:layer:Amadeus-p311-alembic:1
+    - arn:aws:lambda:us-east-1:286391634843:layer:Amadeus-p311-psycopg2-binary:1
 
 loadInfoGripe:
   handler: src/load/info_gripe.handler
@@ -76,12 +50,3 @@ loadInfoGripe:
   memorySize: 512
   environment:
     AWS_STS_REGIONAL_ENDPOINTS: regional
-  vpc:
-    securityGroupIds:
-      - !Ref LambdaSecurityGroup
-    subnetIds:
-      - !Ref PrivateSubnet1
-      - !Ref PrivateSubnet2
-  layers:
-    - arn:aws:lambda:${self:provider.region}:770693421928:layer:Klayers-p311-pandas:1
-    - arn:aws:lambda:${self:provider.region}:770693421928:layer:Klayers-p311-psycopg2-binary:1

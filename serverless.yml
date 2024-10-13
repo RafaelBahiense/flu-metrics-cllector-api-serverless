@@ -5,16 +5,12 @@ frameworkVersion: "3"
 useDotenv: true
 
 package:
-  individually: false
-  excludeDevDependencies: false
+  individually: true
+  excludeDevDependencies: true
   include:
-    - alembic/**
-    - alembic.ini
     - src/**
   exclude:
-    - node_modules/**
-    - .git/**
-    - .venv/**
+    - ./**
 
 provider:
   name: aws
@@ -23,15 +19,24 @@ provider:
   runtime: python3.11
   region: us-east-1
   stage: ${opt:stage, 'dev'}
+  layers:
+    - arn:aws:lambda:us-east-1:286391634843:layer:Amadeus-p311-pandas:1
+    - arn:aws:lambda:us-east-1:286391634843:layer:Amadeus-p311-psycopg2-binary:1
   apiGateway:
     minimumCompressionSize: 1024
     shouldStartNameWithService: true
+  vpc:
+    securityGroupIds:
+      - !Ref LambdaSecurityGroup
+    subnetIds:
+      - !Ref PrivateSubnet1
+      - !Ref PrivateSubnet2
   environment:
     STAGE: ${self:provider.stage}
     AWS_STS_REGIONAL_ENDPOINTS: regional
     DB_HOST: !GetAtt AuroraDBCluster.Endpoint.Address
     DB_SECRET_NAME: my-db-secret
-    DB_NAME: mydatabase
+    DB_NAME: ${env:DB_NAME, 'fluapidatabase'}
   iam:
     role:
       statements:
@@ -48,8 +53,8 @@ plugins:
   - serverless-offline
 
 custom:
-  DBMasterUsername: ${param:DBMasterUsername}
-  DBMasterUserPassword: ${param:DBMasterUserPassword}
+  DBMasterUsername: ${param:DBMasterUsername, 'admin'} # This default will throw a error, it must be changed
+  DBMasterUserPassword: ${param:DBMasterUserPassword, ''}
   functionsBasePath: src
   contentEncoding:
     contentCompression: 100
@@ -58,9 +63,15 @@ custom:
     dockerImage: public.ecr.aws/sam/build-python3.11:latest-x86_64
     useStaticCache: false
     useDownloadCache: false
-    # noDeploy:
-    #   - alembic
-    #   - pip
+    fileName: requirements-prod.txt
+    noDeploy:
+      - pip
+      - setuptools
+      - pandas
+      - numpy
+      - alembic
+      - sqlalchemy
+      - mako
 
 resources:
   Parameters:
@@ -182,6 +193,7 @@ resources:
       Type: AWS::RDS::DBCluster
       Properties:
         Engine: aurora-postgresql
+        Port: 5432
         EngineVersion: "15.4"
         DatabaseName: fluapidatabase
         MasterUsername: !Ref DBMasterUsername
@@ -201,7 +213,6 @@ resources:
         DBInstanceClass: db.serverless
         Engine: aurora-postgresql
         PubliclyAccessible: false
-        Port: 5432
 
     DBSecret:
       Type: AWS::SecretsManager::Secret
