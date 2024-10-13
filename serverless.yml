@@ -84,7 +84,7 @@ resources:
       NoEcho: true
       Description: Master password for the Aurora PostgreSQL database.
       Default: ${self:custom.DBMasterUserPassword}
-
+      
   Resources:
     VPC:
       Type: AWS::EC2::VPC
@@ -95,6 +95,17 @@ resources:
         Tags:
           - Key: Name
             Value: ${self:service}-vpc
+
+    PublicSubnet:
+      Type: AWS::EC2::Subnet
+      Properties:
+        VpcId: !Ref VPC
+        CidrBlock: 10.0.0.0/24
+        AvailabilityZone: ${self:provider.region}a
+        MapPublicIpOnLaunch: true
+        Tags:
+          - Key: Name
+            Value: ${self:service}-public-subnet
 
     PrivateSubnet1:
       Type: AWS::EC2::Subnet
@@ -129,39 +140,75 @@ resources:
         VpcId: !Ref VPC
         InternetGatewayId: !Ref InternetGateway
 
-    RouteTable:
+    NATGateway:
+      Type: AWS::EC2::NatGateway
+      Properties:
+        SubnetId: !Ref PublicSubnet
+        AllocationId: !GetAtt ElasticIP.AllocationId
+
+    ElasticIP:
+      Type: AWS::EC2::EIP
+
+    # Route table for the public subnet, routing traffic to the internet gateway
+    PublicRouteTable:
       Type: AWS::EC2::RouteTable
       Properties:
         VpcId: !Ref VPC
         Tags:
           - Key: Name
-            Value: ${self:service}-route-table
+            Value: ${self:service}-public-route-table
 
-    DefaultRoute:
+    PublicDefaultRoute:
       Type: AWS::EC2::Route
       DependsOn: AttachGateway
       Properties:
-        RouteTableId: !Ref RouteTable
+        RouteTableId: !Ref PublicRouteTable
         DestinationCidrBlock: 0.0.0.0/0
         GatewayId: !Ref InternetGateway
 
-    SubnetRouteTableAssociation1:
+    PublicSubnetRouteTableAssociation:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        SubnetId: !Ref PublicSubnet
+        RouteTableId: !Ref PublicRouteTable
+
+    # Route table for the private subnets, routing traffic through the NAT Gateway
+    PrivateRouteTable:
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId: !Ref VPC
+        Tags:
+          - Key: Name
+            Value: ${self:service}-private-route-table
+
+    PrivateDefaultRoute:
+      Type: AWS::EC2::Route
+      DependsOn: NATGateway
+      Properties:
+        RouteTableId: !Ref PrivateRouteTable
+        DestinationCidrBlock: 0.0.0.0/0
+        NatGatewayId: !Ref NATGateway
+
+    PrivateSubnet1RouteTableAssociation:
       Type: AWS::EC2::SubnetRouteTableAssociation
       Properties:
         SubnetId: !Ref PrivateSubnet1
-        RouteTableId: !Ref RouteTable
+        RouteTableId: !Ref PrivateRouteTable
 
-    SubnetRouteTableAssociation2:
+    PrivateSubnet2RouteTableAssociation:
       Type: AWS::EC2::SubnetRouteTableAssociation
       Properties:
         SubnetId: !Ref PrivateSubnet2
-        RouteTableId: !Ref RouteTable
+        RouteTableId: !Ref PrivateRouteTable
 
     LambdaSecurityGroup:
       Type: AWS::EC2::SecurityGroup
       Properties:
         GroupDescription: "Security group for Lambda functions"
         VpcId: !Ref VPC
+        SecurityGroupEgress:
+          - IpProtocol: -1
+            CidrIp: 0.0.0.0/0
         Tags:
           - Key: Name
             Value: ${self:service}-lambda-sg
