@@ -1,131 +1,99 @@
-from src.infra.dbconnect import get_db_connection
+import json
 import pandas as pd
-
+from src.infra.dbconnect import get_db_connection
 
 def handler(event, context):
-    conn = get_db_connection()
-    cur = conn.cursor()
+    try:
+        limit = int(event.get("limit", 10))
+        page = int(event.get("page", 1))
+        offset = (page - 1) * limit
 
-    if "limit" not in event:
-        event["limit"] = 10
-    if "page" not in event:
-        event["page"] = 1
+        conn = get_db_connection()
+        cur = conn.cursor()
 
-    event["offset"] = (event["page"] - 1) * event["limit"]
+        cur.execute("SELECT * FROM fio_cruz_data LIMIT %s OFFSET %s", (limit, offset))
+        columns = [desc[0] for desc in cur.description]
+        rows = cur.fetchall()
 
-    cur.execute(
-        "SELECT * FROM fio_cruz_data",
-    )
-    columns = cur.description
-    result = [
-        {columns[index][0]: column for index, column in enumerate(value)}
-        for value in cur.fetchall()
-    ]
+        df = pd.DataFrame(rows, columns=columns)
 
-    df = pd.json_normalize(result)
+        if df.empty:
+            return create_response(404, "No data available.")
 
-    half_monthly_cases = reduce_table(df)
+        half_monthly_cases = reduce_table(df)
 
+        return create_response(200, half_monthly_cases.to_json(orient="records", force_ascii=False))
+
+    except Exception as e:
+        print(f"Error occurred: {str(e)}")
+        return create_response(500, f"An error occurred: {str(e)}")
+
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
+def create_response(status_code, body):
     return {
-        "statusCode": 200,
+        "statusCode": status_code,
         "headers": {"Content-Type": "application/json"},
-        "body": half_monthly_cases.to_json(
-            orient="records", force_ascii=False
-        ),  # Ensure Portuguese characters are preserved
+        "body": body,
     }
 
 
 def assign_half_month_portuguese(epiweek):
-    """Assign half-months in Portuguese based on epidemiological week."""
-    if epiweek in range(1, 3):
-        return "Primeira metade de Janeiro"
-    elif epiweek in range(3, 5):
-        return "Segunda metade de Janeiro"
-    elif epiweek in range(5, 7):
-        return "Primeira metade de Fevereiro"
-    elif epiweek in range(7, 9):
-        return "Segunda metade de Fevereiro"
-    elif epiweek in range(9, 11):
-        return "Primeira metade de Março"
-    elif epiweek in range(11, 13):
-        return "Segunda metade de Março"
-    elif epiweek in range(13, 15):
-        return "Primeira metade de Abril"
-    elif epiweek in range(15, 17):
-        return "Segunda metade de Abril"
-    elif epiweek in range(17, 19):
-        return "Primeira metade de Maio"
-    elif epiweek in range(19, 21):
-        return "Segunda metade de Maio"
-    elif epiweek in range(21, 23):
-        return "Primeira metade de Junho"
-    elif epiweek in range(23, 25):
-        return "Segunda metade de Junho"
-    elif epiweek in range(25, 27):
-        return "Primeira metade de Julho"
-    elif epiweek in range(27, 29):
-        return "Segunda metade de Julho"
-    elif epiweek in range(29, 31):
-        return "Primeira metade de Agosto"
-    elif epiweek in range(31, 33):
-        return "Segunda metade de Agosto"
-    elif epiweek in range(33, 35):
-        return "Primeira metade de Setembro"
-    elif epiweek in range(35, 37):
-        return "Segunda metade de Setembro"
-    elif epiweek in range(37, 39):
-        return "Primeira metade de Outubro"
-    elif epiweek in range(39, 41):
-        return "Segunda metade de Outubro"
-    elif epiweek in range(41, 43):
-        return "Primeira metade de Novembro"
-    elif epiweek in range(43, 45):
-        return "Segunda metade de Novembro"
-    elif epiweek in range(45, 47):
-        return "Primeira metade de Dezembro"
-    elif epiweek in range(47, 49):
-        return "Segunda metade de Dezembro"
-    elif epiweek in range(49, 53):
-        return "Fim do Ano"
-    else:
-        return "Semana inválida"
+    half_month_map = {
+        range(1, 3): "Primeira metade de Janeiro",
+        range(3, 5): "Segunda metade de Janeiro",
+        range(5, 7): "Primeira metade de Fevereiro",
+        range(7, 9): "Segunda metade de Fevereiro",
+        range(9, 11): "Primeira metade de Março",
+        range(11, 13): "Segunda metade de Março",
+        range(13, 15): "Primeira metade de Abril",
+        range(15, 17): "Segunda metade de Abril",
+        range(17, 19): "Primeira metade de Maio",
+        range(19, 21): "Segunda metade de Maio",
+        range(21, 23): "Primeira metade de Junho",
+        range(23, 25): "Segunda metade de Junho",
+        range(25, 27): "Primeira metade de Julho",
+        range(27, 29): "Segunda metade de Julho",
+        range(29, 31): "Primeira metade de Agosto",
+        range(31, 33): "Segunda metade de Agosto",
+        range(33, 35): "Primeira metade de Setembro",
+        range(35, 37): "Segunda metade de Setembro",
+        range(37, 39): "Primeira metade de Outubro",
+        range(39, 41): "Segunda metade de Outubro",
+        range(41, 43): "Primeira metade de Novembro",
+        range(43, 45): "Segunda metade de Novembro",
+        range(45, 47): "Primeira metade de Dezembro",
+        range(47, 49): "Segunda metade de Dezembro",
+        range(49, 53): "Fim do Ano",
+    }
+
+    for epi_range, period in half_month_map.items():
+        if epiweek in epi_range:
+            return period
+    return "Semana inválida"
 
 
 def reduce_table(df):
-    # Select relevant columns including 'DS_UF_SIGLA', 'semana_epidemiologica', 'ano_epidemiologico', and 'SRAG'
-    reduced_df = df[
-        ["DS_UF_SIGLA", "ano_epidemiologico", "SRAG", "semana_epidemiologica"]
-    ]
+    reduced_df = df[["DS_UF_SIGLA", "ano_epidemiologico", "SRAG", "semana_epidemiologica"]]
 
-    # Apply the half-month assignment function (in Portuguese)
-    reduced_df["Meia-Mes"] = reduced_df["semana_epidemiologica"].apply(
-        assign_half_month_portuguese
-    )
+    reduced_df["Período do Mês"] = reduced_df["semana_epidemiologica"].apply(assign_half_month_portuguese)
 
-    # Group by state, half-month, and year
-    half_monthly_cases = (
-        reduced_df.groupby(["DS_UF_SIGLA", "ano_epidemiologico", "Meia-Mes"])
-        .sum()
-        .reset_index()
-    )
+    half_monthly_cases = reduced_df.groupby(["DS_UF_SIGLA", "ano_epidemiologico", "Período do Mês"]).agg(
+        {"SRAG": "sum"}
+    ).reset_index()
 
-    # Sort the results by year and epidemiological week
-    half_monthly_cases = half_monthly_cases.sort_values(
-        by=["ano_epidemiologico", "semana_epidemiologica"]
-    )
-
-    # Rename the columns to Portuguese
     half_monthly_cases.rename(
         columns={
             "DS_UF_SIGLA": "Estado",
             "ano_epidemiologico": "Ano Epidemiológico",
             "SRAG": "Casos de SRAG",
-            "Meia-Mes": "Período do Mês",
         },
         inplace=True,
     )
-
-    # Drop 'semana_epidemiologica' from final output since it's already mapped to 'Meia-Mes'
-    half_monthly_cases = half_monthly_cases.drop(columns=["semana_epidemiologica"])
 
     return half_monthly_cases
