@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **Flu Metrics Collector API** is a serverless RESTful API built with Python and the Serverless Framework. It is designed to receive and provide health metrics data collected by IoT devices such as the **Flu Metrics Collector** (an ESP32-based device). The API provides endpoints for devices to submit data like heart rate, oxygen saturation (SpO₂), and temperature. The collected data is stored in a PostgreSQL database for analysis and monitoring.
+The **Flu Metrics Collector API** is a serverless RESTful API built with Python and the Serverless Framework. It is designed to receive and provide health metrics data collected by IoT devices such as the [**Flu Metrics Collector**](https://github.com/RafaelBahiense/flu-metrics-collector) (an ESP32-based device). The API provides endpoints for devices to submit data like heart rate, oxygen saturation (SpO₂), and temperature. The collected data is stored in a PostgreSQL database for analysis and monitoring.
 
 This project is part of a college assignment aimed at collecting health data during specific times of the year and in regions identified by FIOCRUZ (Info Gripe) where flu outbreaks are common.
 
@@ -86,18 +86,8 @@ Create a `.env` file with the necessary variables (see the Configuration section
 
 #### 3. Run Database Migrations
 
-If using a local database, set up the database schema using Alembic.
-
-**Install Alembic:**
-
 ```sh
-pip install alembic
-```
-
-**Run Migrations:**
-
-```sh
-alembic upgrade head
+yarn migrate:dev
 ```
 
 Ensure the `DB_URL` environment variable is set correctly in your `.env` file:
@@ -106,16 +96,26 @@ Ensure the `DB_URL` environment variable is set correctly in your `.env` file:
 DB_URL=postgresql://admin:123456@localhost:5432/mydatabase
 ```
 
+#### 4. Download Info Gripe data
+
+**Run Migrations:**
+
+```sh
+yarn load:dev
+```
+
+#### 5. Seed the database with data
+
+**Run Migrations:**
+
+```sh
+yarn seed:dev
+```
+
 #### 4. Start the Server Locally
 
 ```sh
 yarn dev
-```
-
-This command runs:
-
-```sh
-serverless offline start --config serverless.offline.yml --stage dev --noAuth --reloadHandler --noPrependStageInUrl
 ```
 
 #### 5. Access the API
@@ -140,27 +140,25 @@ When deploying, provide the database master username and password for the Aurora
 serverless deploy --param="DBMasterUserPassword=YourSecurePassword" --param="DBMasterUsername=YourUsername" --verbose
 ```
 
-#### 3. Deploy the Stack
+#### 3. Run Database Migrations in Production
+
+Invoke the migration function to run database migrations on the production database:
 
 ```sh
-serverless deploy --param="DBMasterUserPassword=YourSecurePassword" --param="DBMasterUsername=YourUsername" --verbose
+yarn migrate:prod
 ```
 
-#### 4. Run Database Migrations in Production
+#### 3. Download Info Gripe data in Production
 
-Invoke the migration function to run database migrations on the production database: (NOT WORKING)
+Invoke the load function to download the Info Gripe data
 
 ```sh
-serverless invoke -f migrate
+yarn load:prod
 ```
-
-### Post-Deployment
-
-After deployment, note the API endpoints provided in the output. You can now send data to the API from your devices.
 
 ## API Endpoints
 
-### `POST /data`
+### `POST /metrics`
 
 Endpoint to receive health metrics data from devices.
 
@@ -200,7 +198,7 @@ Endpoint to get stored health metrics.
 **Request:**
 
 - **Method:** `GET`
-- **URL:** `/metrics?page=0&limit=10`
+- **URL:** `/metrics?page=1&limit=10`
 - **Headers:**
   - `Content-Type: application/json`
 - **Body:**
@@ -219,6 +217,34 @@ Endpoint to get stored health metrics.
       "heart_rate": 72,
       "spo2": 98,
       "temperature": 36.5
+    }
+]
+```
+
+### `GET /metrics/info-gripe-aggregate`
+
+Endpoint to get stored health metrics.
+
+**Request:**
+
+- **Method:** `GET`
+- **URL:** `/metrics/info-gripe-aggregate`
+- **Headers:**
+  - `Content-Type: application/json`
+- **Body:**
+
+**Response:**
+
+- **Status Code:** `200 OK` on success.
+- **Body:**
+
+```json
+[
+    {
+        "Estado": "RJ",
+        "Ano Epidemiológico": 2024,
+        "Período do Mês": "Primeira metade de Janeiro",
+        "Casos de SRAG": 626
     }
 ]
 ```
@@ -263,7 +289,7 @@ To apply migrations:
 alembic upgrade head
 ```
 
-### Configuration
+### Migrations Configuration
 
 Ensure that `alembic.ini` and `alembic/env.py` are configured to use the `DB_URL` environment variable.
 
