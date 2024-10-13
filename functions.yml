@@ -38,8 +38,6 @@ migrate:
     include:
       - alembic/**
       - alembic.ini
-  environment:
-    AWS_STS_REGIONAL_ENDPOINTS: regional
   layers:
     - arn:aws:lambda:us-east-1:286391634843:layer:Amadeus-p311-alembic:1
     - arn:aws:lambda:us-east-1:286391634843:layer:Amadeus-p311-psycopg2-binary:1
@@ -48,5 +46,6 @@ loadInfoGripe:
   handler: src/load/info_gripe.handler
   timeout: 300
   memorySize: 512
-  environment:
-    AWS_STS_REGIONAL_ENDPOINTS: regional
+
+seedHealthMetrics:
+  handler: src/seed/health_metrics.handler

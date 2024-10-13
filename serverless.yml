@@ -84,7 +84,7 @@ resources:
       NoEcho: true
       Description: Master password for the Aurora PostgreSQL database.
       Default: ${self:custom.DBMasterUserPassword}
-      
+
   Resources:
     VPC:
       Type: AWS::EC2::VPC
@@ -149,7 +149,6 @@ resources:
     ElasticIP:
       Type: AWS::EC2::EIP
 
-    # Route table for the public subnet, routing traffic to the internet gateway
     PublicRouteTable:
       Type: AWS::EC2::RouteTable
       Properties:
@@ -172,7 +171,6 @@ resources:
         SubnetId: !Ref PublicSubnet
         RouteTableId: !Ref PublicRouteTable
 
-    # Route table for the private subnets, routing traffic through the NAT Gateway
     PrivateRouteTable:
       Type: AWS::EC2::RouteTable
       Properties:
